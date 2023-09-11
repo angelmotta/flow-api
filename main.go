@@ -3,21 +3,22 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/jackc/pgx/v5"
+	"github.com/angelmotta/flow-api/internal/config"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"os"
 )
 
 func main() {
-	pgDsn := "user=postgres password=postgres host=localhost port=5432 dbname=flowdb sslmode=disable"
-	conn, err := pgx.Connect(context.Background(), pgDsn)
+	c := config.Init()
+	dbpool, err := pgxpool.New(context.Background(), c.GetPgDsn())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
 		os.Exit(1)
 	}
-	defer conn.Close(context.Background())
+	defer dbpool.Close()
 
 	var greeting string
-	err = conn.QueryRow(context.Background(), "select 'Hello, world!'").Scan(&greeting)
+	err = dbpool.QueryRow(context.Background(), "select 'Hello, world!'").Scan(&greeting)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 		os.Exit(1)
