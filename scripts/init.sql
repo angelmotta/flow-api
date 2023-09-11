@@ -18,3 +18,7 @@ CREATE TABLE exchanges (
     valid_duration INTEGER NOT NULL,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+--- insert into users one record
+INSERT INTO users (email, role, dni, name, lastname_main, lastname_secondary, address)
+VALUES ('angelmotta@gmail.com', 'customer', '12345678', 'Angel', 'Motta', 'Paz', 'Manuel Pazos 709');
