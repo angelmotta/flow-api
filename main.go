@@ -2,16 +2,12 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"github.com/angelmotta/flow-api/api"
 	"github.com/angelmotta/flow-api/database"
 	"github.com/angelmotta/flow-api/internal/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"log"
 )
-
-type Server struct {
-	Store database.Store // Store is a dependency defined as an interface
-}
 
 func main() {
 	c := config.Init()
@@ -21,23 +17,33 @@ func main() {
 	}
 	defer dbpool.Close()
 
-	// Create a store dependency with the database pool
-	store := database.NewStore(dbpool)
+	// Create a store dependency using the database pool
+	store := database.NewStore(dbpool) // store type implements store interface
 
 	// Create a server by injecting the store as a dependency
-	server := &Server{store}
-	u, err := server.Store.GetUser(1)
+	server := api.NewServer(store)
+
+	// Use methods from the server type
+	// Read operation: retrieve user from database
+	u, err := server.GetUser(2)
 	if err != nil {
 		log.Fatalf("Error getting user: %v", err)
 	}
-	fmt.Println(u)
+	log.Println("User retrieved from database:")
+	log.Println(u)
 
-	//var greeting string
-	//err = dbpool.QueryRow(context.Background(), "select 'Hello, world!'").Scan(&greeting)
-	//if err != nil {
-	//	fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
-	//	os.Exit(1)
-	//}
-
-	//fmt.Println(greeting)
+	// Write operation: create user in database
+	newUser := database.User{
+		Email:             "angelmotta@gmail.com",
+		Role:              "customer",
+		Dni:               "12345678",
+		Name:              "Angel",
+		LastnameMain:      "Motta",
+		LastnameSecondary: "Paz",
+		Address:           "Av. Los Incas 123",
+	}
+	err = server.CreateUser(&newUser)
+	if err != nil {
+		log.Println("Error creating user:", err)
+	}
 }
