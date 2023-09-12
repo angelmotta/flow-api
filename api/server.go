@@ -1,9 +1,7 @@
 package api
 
 import (
-	"errors"
 	"github.com/angelmotta/flow-api/database"
-	"github.com/jackc/pgx/v5/pgconn"
 	"log"
 )
 
@@ -15,9 +13,9 @@ func NewServer(store database.Store) *Server {
 	return &Server{store}
 }
 
-func (s *Server) GetUser(id int) (*database.User, error) {
-	log.Println("Getting user...")
-	result, err := s.store.GetUser(id)
+func (s *Server) GetUser(email string) (*database.User, error) {
+	log.Printf("Getting user: %v", email)
+	result, err := s.store.GetUser(email)
 	if err != nil {
 		return nil, err
 	}
@@ -26,18 +24,22 @@ func (s *Server) GetUser(id int) (*database.User, error) {
 }
 
 func (s *Server) CreateUser(user *database.User) error {
-	log.Println("Creating user...")
+	log.Printf("Creating user: %v", user.Email)
 	err := s.store.CreateUser(user)
-	var pgErr *pgconn.PgError
 	if err != nil {
-		log.Println("Error captured from database layer", err)
-		if errors.As(err, &pgErr) {
-			if pgErr.Code == "23505" {
-				return errors.New("user already exists")
-			}
-		}
-		return errors.New("internal server error")
+		return err
 	}
 	// Could perform some validation before returning the result
+	log.Println("User successfully created")
+	return nil
+}
+
+func (s *Server) DeleteUser(id int) error {
+	log.Printf("Deleting User with ID: %v", id)
+	err := s.store.DeleteUser(id)
+	if err != nil {
+		return err
+	}
+	log.Println("User successfully deleted")
 	return nil
 }

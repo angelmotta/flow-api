@@ -23,14 +23,19 @@ func main() {
 	// Create a server by injecting the store as a dependency
 	server := api.NewServer(store)
 
-	// Use methods from the server type
+	// Using methods from server to perform operations
 	// Read operation: retrieve user from database
-	u, err := server.GetUser(2)
+	email := "angelmotta@gmail.com"
+	u, err := server.GetUser(email)
 	if err != nil {
-		log.Fatalf("Error getting user: %v", err)
+		log.Printf("Error getting user: %v", err)
 	}
 	log.Println("User retrieved from database:")
-	log.Println(u)
+	if u == nil {
+		log.Println("User not found (user is available to be created)")
+	} else {
+		log.Println(u) // user value
+	}
 
 	// Write operation: create user in database
 	newUser := database.User{
@@ -44,6 +49,14 @@ func main() {
 	}
 	err = server.CreateUser(&newUser)
 	if err != nil {
-		log.Println("Error creating user:", err)
+		// TODO: Check if error is for existing record or other error
+		log.Printf("Error creating user: %v", err)
+	}
+
+	// Delete operation: delete user from database
+	userId := 2
+	err = server.DeleteUser(userId)
+	if err != nil {
+		log.Printf("Error deleting user: %v", err)
 	}
 }
