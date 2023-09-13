@@ -2,7 +2,9 @@ package api
 
 import (
 	"github.com/angelmotta/flow-api/database"
+	"github.com/go-chi/chi/v5"
 	"log"
+	"net/http"
 )
 
 type Server struct {
@@ -42,4 +44,14 @@ func (s *Server) DeleteUser(id int) error {
 	}
 	log.Println("User successfully deleted")
 	return nil
+}
+
+// HTTP Handlers
+func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
+	email := chi.URLParam(r, "email")
+	log.Println(email)
+	_, err := w.Write([]byte("GetUserHandler"))
+	if err != nil {
+		return
+	}
 }
