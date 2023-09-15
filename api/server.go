@@ -46,12 +46,23 @@ func (s *Server) DeleteUser(id int) error {
 	return nil
 }
 
-// HTTP Handlers
+// GetUserHandler HTTP Handler
 func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	email := chi.URLParam(r, "email")
-	log.Println(email)
-	_, err := w.Write([]byte("GetUserHandler"))
+	// TODO: Validate input (email)
+	user, err := s.store.GetUser(email)
 	if err != nil {
+		log.Printf("Error getting user from database: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	if user == nil {
+		log.Println("User not found")
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	_, err = w.Write([]byte("User found: " + user.Email + " DNI: " + user.Dni))
+	if err != nil {
+		log.Println("Error writing http response: ", err)
 		return
 	}
 }

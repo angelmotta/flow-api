@@ -44,6 +44,7 @@ func (s *store) GetUser(email string) (*User, error) {
 	err := s.db.QueryRow(context.Background(), "select id, email, role, dni, name, lastname_main, lastname_secondary, address, created_at from users where email = $1", email).Scan(&user.Id, &user.Email, &user.Role, &user.Dni, &user.Name, &user.LastnameMain, &user.LastnameSecondary, &user.Address, &user.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			log.Println("db layer: User not found")
 			return nil, nil
 		}
 		return nil, err
