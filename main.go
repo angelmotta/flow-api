@@ -21,50 +21,17 @@ func main() {
 	defer dbpool.Close()
 
 	// Create a store dependency using the database pool
-	store := database.NewStore(dbpool) // store implements the Store interface
-
+	store := database.NewPgStore(dbpool) // store implements the Store interface
 	// Create a server by injecting the store as a dependency
 	server := api.NewServer(store)
 
-	// Using methods from server to perform operations
-	// Read operation: retrieve user from database
-	email := "angelmotta@gmail.com"
-	u, err := server.GetUser(email)
-	if err != nil {
-		log.Printf("Error getting user: %v", err)
-	}
-	log.Println("User retrieved from database:")
-	if u == nil {
-		log.Println("User not found (user is available to be created)")
-	} else {
-		log.Println(u) // user value
-	}
-
-	// Write operation: create user in database
-	newUser := database.User{
-		Email:             "angelmotta@gmail.com",
-		Role:              "customer",
-		Dni:               "12345678",
-		Name:              "Angel",
-		LastnameMain:      "Motta",
-		LastnameSecondary: "Paz",
-		Address:           "Av. Los Incas 123",
-	}
-	err = server.CreateUser(&newUser)
-	if err != nil {
-		// TODO: Check if error is for existing record or other error
-		log.Printf("Error creating user: %v", err)
-	}
-
-	// Delete operation: delete user from database
-	userId := 2
-	err = server.DeleteUser(userId)
-	if err != nil {
-		log.Printf("Error deleting user: %v", err)
-	}
-
 	// Chi router
 	r := chi.NewRouter()
+	r.Get("/api/v1/users", server.GetUsersHandler)
 	r.Get("/api/v1/users/{email}", server.GetUserHandler)
+	r.Post("/api/v1/users", server.CreateUserHandler)
+	r.Put("/api/v1/users/{id}", server.UpdateUserHandler)
+	r.Delete("/api/v1/users/{id}", server.DeleteUserHandler)
 	log.Fatal(http.ListenAndServe(":8080", r))
+
 }

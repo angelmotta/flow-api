@@ -30,16 +30,16 @@ type Store interface {
 	//UpdateUser(user *User) error
 }
 
-func NewStore(db *pgxpool.Pool) Store {
-	return &store{db} // store type implements store interface
+func NewPgStore(db *pgxpool.Pool) Store {
+	return &storePostgres{db} // storePostgres type implements storePostgres interface
 }
 
-// The actual store containing the Postgres database pool (state)
-type store struct {
+// The actual storePostgres containing the Postgres database pool (state)
+type storePostgres struct {
 	db *pgxpool.Pool
 }
 
-func (s *store) GetUser(email string) (*User, error) {
+func (s *storePostgres) GetUser(email string) (*User, error) {
 	var user User
 	err := s.db.QueryRow(context.Background(), "select id, email, role, dni, name, lastname_main, lastname_secondary, address, created_at from users where email = $1", email).Scan(&user.Id, &user.Email, &user.Role, &user.Dni, &user.Name, &user.LastnameMain, &user.LastnameSecondary, &user.Address, &user.CreatedAt)
 	if err != nil {
@@ -52,7 +52,7 @@ func (s *store) GetUser(email string) (*User, error) {
 	return &user, nil
 }
 
-func (s *store) CreateUser(user *User) error {
+func (s *storePostgres) CreateUser(user *User) error {
 	_, err := s.db.Exec(context.Background(), "insert into users (email, role, dni, name, lastname_main, lastname_secondary, address) values ($1, $2, $3, $4, $5, $6, $7)", user.Email, user.Role, user.Dni, user.Name, user.LastnameMain, user.LastnameSecondary, user.Address)
 	var pgErr *pgconn.PgError
 	if err != nil {
@@ -68,7 +68,7 @@ func (s *store) CreateUser(user *User) error {
 	return nil
 }
 
-func (s *store) DeleteUser(id int) error {
+func (s *storePostgres) DeleteUser(id int) error {
 	commandTag, err := s.db.Exec(context.Background(), "delete from users where id = $1", id)
 	if err != nil {
 		log.Println("Error captured from database layer in DeleteUser")
@@ -77,6 +77,16 @@ func (s *store) DeleteUser(id int) error {
 	}
 	if commandTag.RowsAffected() != 1 {
 		return errors.New("user not found")
+	}
+	return nil
+}
+
+func (s *storePostgres) UpdateUser(id int) error {
+	_, err := s.db.Exec(context.Background(), "update users set email = $1, role = $2, dni = $3, name = $4, lastname_main = $5, lastname_secondary = $6, address = $7 where id = $8", id)
+	if err != nil {
+		log.Println("Error captured from database layer in UpdateUser")
+		log.Println(err)
+		return errors.New("internal server error")
 	}
 	return nil
 }
