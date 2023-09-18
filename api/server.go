@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"github.com/angelmotta/flow-api/database"
 	"github.com/go-chi/chi/v5"
 	"log"
@@ -61,8 +62,15 @@ func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// TODO: Return user as JSON
+	respJson, err := json.Marshal(user)
+	if err != nil {
+		log.Printf("Error marshalling user: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-	_, err = w.Write([]byte("User found: " + user.Email + " DNI: " + user.Dni))
+	//_, err = w.Write([]byte("User found: " + user.Email + " DNI: " + user.Dni))
+	_, err = w.Write(respJson)
 	if err != nil {
 		log.Println("Error writing http response: ", err)
 		return

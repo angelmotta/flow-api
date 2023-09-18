@@ -11,15 +11,15 @@ import (
 )
 
 type User struct {
-	Id                int
-	Email             string
-	Role              string
-	Dni               string
-	Name              string
-	LastnameMain      string
-	LastnameSecondary string
-	Address           string
-	CreatedAt         time.Time
+	Id                int       `json:"id"`
+	Email             string    `json:"email"`
+	Role              string    `json:"role"`
+	Dni               string    `json:"dni"`
+	Name              string    `json:"name"`
+	LastnameMain      string    `json:"lastnameMain"`
+	LastnameSecondary string    `json:"lastnameSecondary"`
+	Address           string    `json:"address"`
+	CreatedAt         time.Time `json:"createdAt"`
 }
 
 type Store interface {
