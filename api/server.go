@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/angelmotta/flow-api/database"
 	"github.com/go-chi/chi/v5"
 	"log"
@@ -10,6 +11,15 @@ import (
 
 type Server struct {
 	store database.Store // store is a dependency defined as an interface
+}
+
+type userCreateRequest struct {
+	Email             string `json:"email"`
+	Dni               string `json:"dni"`
+	Name              string `json:"name"`
+	LastnameMain      string `json:"lastname_main"`
+	LastnameSecondary string `json:"lastname_secondary"`
+	Address           string `json:"address"`
 }
 
 func NewServer(store database.Store) *Server {
@@ -61,7 +71,7 @@ func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	// TODO: Return user as JSON
+
 	respJson, err := json.Marshal(user)
 	if err != nil {
 		log.Printf("Error marshalling user: %v", err)
@@ -80,7 +90,49 @@ func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 // CreateUserHandler HTTP Handler creates a user
 func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("CreateUserHandler")
-	_, err := w.Write([]byte("CreateUserHandler"))
+	var uCreateRequest userCreateRequest
+
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+
+	err := dec.Decode(&uCreateRequest)
+
+	// TODO: improve error verification about json input
+	if err != nil {
+		log.Printf("Error decoding json: %v", err)
+		log.Println(err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	log.Printf("received request: %v", uCreateRequest)
+
+	// Define new user based on request and extra fields
+	u := &database.User{
+		Email:             uCreateRequest.Email,
+		Role:              "customer",
+		Dni:               uCreateRequest.Dni,
+		Name:              uCreateRequest.Name,
+		LastnameMain:      uCreateRequest.LastnameMain,
+		LastnameSecondary: uCreateRequest.LastnameSecondary,
+		Address:           uCreateRequest.Address,
+	}
+
+	log.Println("Creating user...")
+	err = s.createUser(u)
+	if err != nil {
+		log.Printf("Error creating user: %v", err)
+		log.Println(err.Error())
+		// Check if error is a duplicate key error or another error
+		duplUserErr := errors.New("user already exists")
+		if errors.Is(err, duplUserErr) {
+			log.Println("User already exists bro!!!!")
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	_, err = w.Write([]byte("CreateUserHandler success"))
 	if err != nil {
 		log.Println("Error writing http response: ", err)
 		return

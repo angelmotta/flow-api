@@ -26,6 +26,7 @@ func main() {
 	server := api.NewServer(store)
 
 	// Chi router
+	log.Println("Starting server at port 8080")
 	r := chi.NewRouter()
 	r.Get("/api/v1/users", server.GetUsersHandler)
 	r.Get("/api/v1/users/{email}", server.GetUserHandler)
@@ -33,5 +34,4 @@ func main() {
 	r.Put("/api/v1/users/{id}", server.UpdateUserHandler)
 	r.Delete("/api/v1/users/{id}", server.DeleteUserHandler)
 	log.Fatal(http.ListenAndServe(":8080", r))
-
 }
