@@ -3,14 +3,19 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/angelmotta/flow-api/database"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/render"
+	"io"
 	"log"
 	"net/http"
+	"strings"
 )
 
 type Server struct {
-	store database.Store // store is a dependency defined as an interface
+	store        database.Store // store is a dependency defined as an interface
+	MaxBodyBytes int64          // maxBodyBytes is the maximum number of bytes the server will read parsing the request body
 }
 
 type userCreateRequest struct {
@@ -22,8 +27,33 @@ type userCreateRequest struct {
 	Address           string `json:"address"`
 }
 
+func (u *userCreateRequest) Bind(r *http.Request) error {
+	if u.Email == "" {
+		return errors.New("missing required 'email' field")
+	}
+	if u.Dni == "" {
+		return errors.New("missing required 'dni' field")
+	}
+	if u.Name == "" {
+		return errors.New("missing required 'name' field")
+	}
+	if u.LastnameMain == "" {
+		return errors.New("missing required 'lastname_main' field")
+	}
+	if u.LastnameSecondary == "" {
+		return errors.New("missing required 'lastname_secondary' field")
+	}
+	if u.Address == "" {
+		return errors.New("missing required 'address' field")
+	}
+	return nil
+}
+
 func NewServer(store database.Store) *Server {
-	return &Server{store}
+	return &Server{
+		store,
+		1024 * 1024, // 1MB
+	}
 }
 
 func (s *Server) getUser(email string) (*database.User, error) {
@@ -87,21 +117,65 @@ func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func ErrInvalidRequest(err error) render.Renderer {
+	return &ErrResponse{
+		Err:            err,
+		HTTPStatusCode: 400,
+		StatusText:     "Invalid request.",
+		ErrorText:      err.Error(),
+	}
+}
+
 // CreateUserHandler HTTP Handler creates a user
 func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("CreateUserHandler")
+	// Creating requestUserCreate 'Object' based on http request
 	var uCreateRequest userCreateRequest
+
+	//if err := render.Bind(r, &uCreateRequest); err != nil {
+	//	err := render.Render(w, r, ErrInvalidRequest(err))
+	//	if err != nil {
+	//		log.Println("Error trying to render error: ", err)
+	//		http.Error(w, err.Error(), http.StatusInternalServerError)
+	//	}
+	//	return
+	//}
 
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
-
 	err := dec.Decode(&uCreateRequest)
-
-	// TODO: improve error verification about json input
 	if err != nil {
-		log.Printf("Error decoding json: %v", err)
-		log.Println(err.Error())
-		w.WriteHeader(http.StatusInternalServerError)
+		log.Printf("Got error decoding json: %v", err.Error())
+
+		var syntaxError *json.SyntaxError
+		var unmarshalTypeError *json.UnmarshalTypeError
+
+		switch {
+		case errors.As(err, &syntaxError):
+			msg := fmt.Sprintf("Request body contains badly-formed JSON (at position %d)", syntaxError.Offset)
+			http.Error(w, msg, http.StatusBadRequest)
+
+		case errors.Is(err, io.ErrUnexpectedEOF):
+			msg := fmt.Sprintf("Request body contains badly-formed JSON")
+			http.Error(w, msg, http.StatusBadRequest)
+
+		case errors.As(err, &unmarshalTypeError):
+			msg := fmt.Sprintf("Request body contains an invalid value for the %q field (at position %d)", unmarshalTypeError.Field, unmarshalTypeError.Offset)
+			http.Error(w, msg, http.StatusBadRequest)
+
+		case strings.HasPrefix(err.Error(), "json: unknown field "):
+			fieldName := strings.TrimPrefix(err.Error(), "json: unknown field ")
+			msg := fmt.Sprintf("Request body contains unknown field %s", fieldName)
+			http.Error(w, msg, http.StatusBadRequest)
+
+		case errors.Is(err, io.EOF):
+			msg := "Request body must not be empty"
+			http.Error(w, msg, http.StatusBadRequest)
+
+		default:
+			log.Println("Error during decode json: ", err.Error())
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		}
 		return
 	}
 	log.Printf("received request: %v", uCreateRequest)
