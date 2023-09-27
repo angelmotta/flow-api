@@ -18,3 +18,7 @@ func (e *ErrResponse) Render(w http.ResponseWriter, r *http.Request) error {
 	render.Status(r, e.HTTPStatusCode)
 	return nil
 }
+
+func (e *ErrResponse) Error() string {
+	return e.StatusText
+}
