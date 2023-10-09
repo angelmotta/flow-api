@@ -49,6 +49,7 @@ func (u *userCreateRequest) Bind(r *http.Request) error {
 	return nil
 }
 
+// NewServer receive an Interface Store and creates a new API Server Object
 func NewServer(store database.Store) *Server {
 	return &Server{
 		store,
@@ -166,6 +167,7 @@ func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	var uCreateRequest userCreateRequest
 
 	// Bind request body to userCreateRequest struct using custom bind function
+	// TODO: refactor type error received from DecodeJsonBody
 	err := s.DecodeJsonBody(w, r, &uCreateRequest)
 	if err != nil {
 		err := render.Render(w, r, err.(*ErrResponse)) // send error to client using chi render (type assertion)
@@ -200,17 +202,28 @@ func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create user record in database
-	err = s.createUser(u)
+	err = s.store.CreateUser(u)
 	if err != nil {
 		log.Printf("Error creating user: %v", err)
 		// Check if error is a duplicate key error or another error
 		duplUserErr := errors.New("user already exists")
-		if errors.Is(err, duplUserErr) {
-			log.Println("User already exists bro!!!!")
-			http.Error(w, err.Error(), http.StatusConflict)
-			return
+		if errors.As(err, &duplUserErr) {
+			log.Println("Error: User already exists bro!!!!")
+			errorResponse := &ErrResponse{Err: err, HTTPStatusCode: http.StatusConflict, StatusText: "User already exists"}
+			err := render.Render(w, r, errorResponse)
+			if err != nil { // should never happen
+				log.Println("Error trying to render error response: ", err)
+				http.Error(w, "Internal error", http.StatusInternalServerError)
+			}
+		} else {
+			errorResponse := &ErrResponse{Err: err, HTTPStatusCode: http.StatusInternalServerError, StatusText: "Internal server error"}
+			err := render.Render(w, r, errorResponse)
+			if err != nil { // should never happen
+				log.Println("Error trying to render error response: ", err)
+				http.Error(w, "Internal error", http.StatusInternalServerError)
+			}
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		// Stop handler execution
 		return
 	}
 	_, err = w.Write([]byte("CreateUserHandler success"))

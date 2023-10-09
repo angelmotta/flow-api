@@ -17,12 +17,17 @@ func main() {
 
 	dbpool, err := pgxpool.New(context.Background(), c.GetPgDsn())
 	if err != nil {
-		log.Fatalf("Unable to connect to database: %v\n", err)
+		log.Fatalf("Error creating a new Pool connection from Postgres database: %v\n", err)
+	}
+	err = dbpool.Ping(context.Background())
+	if err != nil {
+		log.Fatalf("Unable to acquires a connection from the Pool and check it: %v\n", err)
 	}
 	defer dbpool.Close()
+	log.Println("Successfully connected to Postgres database")
 
-	// Create a store dependency using the database pool
-	store := database.NewPgStore(dbpool) // store implements the Store interface
+	// Create a store Object using the database pool
+	store := database.NewPgStore(dbpool) // store Object implements the Store interface
 	// Create a server by injecting the store as a dependency
 	server := api.NewServer(store)
 
