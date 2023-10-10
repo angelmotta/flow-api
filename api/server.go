@@ -121,6 +121,10 @@ func (s *Server) deleteUser(id int) error {
 	return nil
 }
 
+type SuccessResponse struct {
+	Status string `json:"status"`
+}
+
 // DecodeJsonBody decodes the request body into the provided interface
 func (s *Server) DecodeJsonBody(w http.ResponseWriter, r *http.Request, payload interface{}) error {
 	dec := json.NewDecoder(r.Body)
@@ -252,8 +256,8 @@ func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	err = s.store.CreateUser(u)
 	if err != nil {
 		log.Printf("Error creating user: %v", err)
-		errorResponse := &ErrResponse{Err: err, HTTPStatusCode: http.StatusConflict, StatusText: err.Error()}
-		// TODO: identify kind of error message and return a more specific HTTP Code
+		httpStatusCode := getCreateUserHttpCode(err.Error())
+		errorResponse := &ErrResponse{Err: err, HTTPStatusCode: httpStatusCode, StatusText: err.Error()}
 		err := render.Render(w, r, errorResponse)
 		if err != nil { // should never happen
 			log.Println("Error trying to render error response: ", err)
@@ -262,11 +266,26 @@ func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 		// Stop handler execution
 		return
 	}
-	_, err = w.Write([]byte("CreateUserHandler success"))
+	successResp := &SuccessResponse{Status: "User successfully created"}
+	jsonResp, err := json.Marshal(successResp)
+	if err != nil {
+		log.Println("Error marshalling success response: ", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	_, err = w.Write(jsonResp)
 	if err != nil {
 		log.Println("Error writing http response: ", err)
 		return
 	}
+}
+
+func getCreateUserHttpCode(errMsg string) int {
+	if strings.Contains(errMsg, "A user already exists") {
+		return http.StatusConflict
+	}
+	return http.StatusInternalServerError
 }
 
 // DeleteUserHandler HTTP Handler deletes a user

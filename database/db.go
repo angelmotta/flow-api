@@ -75,7 +75,7 @@ func (s *storePostgres) userPgError(err error) error {
 	if pgErr.Code == "23505" {
 		switch pgErr.ConstraintName {
 		case "users_email_key":
-			return errors.New("A user already exists using the same email ")
+			return errors.New("A user already exists using the same email")
 		case "users_dni_key":
 			return errors.New("A user already exists using the same DNI")
 		}
