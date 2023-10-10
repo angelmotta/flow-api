@@ -239,23 +239,12 @@ func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	err = s.store.CreateUser(u)
 	if err != nil {
 		log.Printf("Error creating user: %v", err)
-		// Check if error is a duplicate key error or another error
-		duplUserErr := errors.New("user already exists")
-		if errors.As(err, &duplUserErr) {
-			log.Println("Error: User already exists bro!!!!")
-			errorResponse := &ErrResponse{Err: err, HTTPStatusCode: http.StatusConflict, StatusText: "User already exists"}
-			err := render.Render(w, r, errorResponse)
-			if err != nil { // should never happen
-				log.Println("Error trying to render error response: ", err)
-				http.Error(w, "Internal error", http.StatusInternalServerError)
-			}
-		} else {
-			errorResponse := &ErrResponse{Err: err, HTTPStatusCode: http.StatusInternalServerError, StatusText: "Internal server error"}
-			err := render.Render(w, r, errorResponse)
-			if err != nil { // should never happen
-				log.Println("Error trying to render error response: ", err)
-				http.Error(w, "Internal error", http.StatusInternalServerError)
-			}
+		errorResponse := &ErrResponse{Err: err, HTTPStatusCode: http.StatusConflict, StatusText: err.Error()}
+		// TODO: identify kind of error message and return a more specific HTTP Code
+		err := render.Render(w, r, errorResponse)
+		if err != nil { // should never happen
+			log.Println("Error trying to render error response: ", err)
+			http.Error(w, "Internal error", http.StatusInternalServerError)
 		}
 		// Stop handler execution
 		return
