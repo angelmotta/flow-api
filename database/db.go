@@ -53,11 +53,11 @@ func (s *storePostgres) GetUser(email string) (*User, error) {
 }
 
 func (s *storePostgres) CreateUser(user *User) error {
+	log.Println("Creating a user record in DB")
 	_, err := s.db.Exec(context.Background(), "insert into users (email, role, dni, name, lastname_main, lastname_secondary, address) values ($1, $2, $3, $4, $5, $6, $7)", user.Email, user.Role, user.Dni, user.Name, user.LastnameMain, user.LastnameSecondary, user.Address)
 	var pgErr *pgconn.PgError
 	if err != nil {
 		log.Println("Error captured from database layer in CreateUser")
-		log.Println(err)
 		if errors.As(err, &pgErr) {
 			if pgErr.Code == "23505" {
 				return errors.New("user already exists")

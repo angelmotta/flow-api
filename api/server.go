@@ -49,6 +49,30 @@ func (u *userCreateRequest) Bind(r *http.Request) error {
 	return nil
 }
 
+// validate validates the userCreateRequest fields of the request
+func (u *userCreateRequest) validate() error {
+	if u.Email == "" {
+		return errors.New("missing required 'email' field")
+	}
+	if u.Dni == "" {
+		return errors.New("missing required 'dni' field")
+	}
+	if u.Name == "" {
+		return errors.New("missing required 'name' field")
+	}
+	if u.LastnameMain == "" {
+		return errors.New("missing required 'lastname_main' field")
+	}
+	if u.LastnameSecondary == "" {
+		return errors.New("missing required 'lastname_secondary' field")
+	}
+	if u.Address == "" {
+		return errors.New("missing required 'address' field")
+	}
+	// We can perform more validations here
+	return nil
+}
+
 // NewServer receive an Interface Store and creates a new API Server Object
 func NewServer(store database.Store) *Server {
 	return &Server{
@@ -113,8 +137,9 @@ func (s *Server) DecodeJsonBody(w http.ResponseWriter, r *http.Request, payload 
 
 		case strings.HasPrefix(err.Error(), "json: unknown field "):
 			fieldName := strings.TrimPrefix(err.Error(), "json: unknown field ")
+			fieldName = strings.Trim(fieldName, "\"")
 			log.Println("Unknown field: ", fieldName)
-			msg := fmt.Sprintf("Request body contains unknown field %s", fieldName)
+			msg := fmt.Sprintf("Unknown field '%s' in request", fieldName)
 			return &ErrResponse{Err: err, HTTPStatusCode: http.StatusBadRequest, StatusText: msg}
 
 		case errors.Is(err, io.EOF):
@@ -164,13 +189,12 @@ func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("CreateUserHandler")
 	// Creating requestUserCreate 'Object' based on http request
-	var uCreateRequest userCreateRequest
+	uCreateRequest := &userCreateRequest{}
 
 	// Bind request body to userCreateRequest struct using custom bind function
-	// TODO: refactor type error received from DecodeJsonBody
-	err := s.DecodeJsonBody(w, r, &uCreateRequest)
+	err := s.DecodeJsonBody(w, r, uCreateRequest)
 	if err != nil {
-		err := render.Render(w, r, err.(*ErrResponse)) // send error to client using chi render (type assertion)
+		err := render.Render(w, r, err.(*ErrResponse)) // type assertion to access the interface value's underlying concrete value.
 		if err != nil {
 			log.Println("Error trying to render error: ", err)
 			return
@@ -179,7 +203,17 @@ func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Bind request body to userCreateRequest struct using chi render.Bind
-	/*if err := render.Bind(r, &uCreateRequest); err != nil {
+	//if err := render.Bind(r, &uCreateRequest); err != nil {
+	//	err := render.Render(w, r, ErrInvalidRequest(err))
+	//	if err != nil {
+	//		log.Println("Error trying to render error: ", err)
+	//		http.Error(w, err.Error(), http.StatusInternalServerError)
+	//	}
+	//	return
+	//}
+
+	err = uCreateRequest.validate()
+	if err != nil {
 		err := render.Render(w, r, ErrInvalidRequest(err))
 		if err != nil {
 			log.Println("Error trying to render error: ", err)
@@ -187,10 +221,10 @@ func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	*/
-	log.Printf("received request: %v", uCreateRequest)
 
-	// Define new user based on request and extra fields
+	log.Printf("valid request received: %v", uCreateRequest)
+
+	// Create new user Object based on request
 	u := &database.User{
 		Email:             uCreateRequest.Email,
 		Role:              "customer",
