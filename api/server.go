@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/mail"
 	"strings"
 )
 
@@ -54,6 +55,9 @@ func (u *userCreateRequest) validate() error {
 	if u.Email == "" {
 		return errors.New("missing required 'email' field")
 	}
+	if !isValidEmail(u.Email) {
+		return errors.New("invalid email")
+	}
 	if u.Dni == "" {
 		return errors.New("missing required 'dni' field")
 	}
@@ -71,6 +75,11 @@ func (u *userCreateRequest) validate() error {
 	}
 	// We can perform more validations here
 	return nil
+}
+
+func isValidEmail(email string) bool {
+	_, err := mail.ParseAddress(email)
+	return err == nil
 }
 
 // NewServer receive an Interface Store and creates a new API Server Object
@@ -158,7 +167,11 @@ func (s *Server) DecodeJsonBody(w http.ResponseWriter, r *http.Request, payload 
 // GetUserHandler HTTP Handler returns a specific user
 func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	email := chi.URLParam(r, "email")
-	// TODO: Validate input (email)
+	if !isValidEmail(email) {
+		log.Println("Invalid email")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 	user, err := s.store.GetUser(email)
 	if err != nil {
 		log.Printf("Error getting user from database: %v", err)
