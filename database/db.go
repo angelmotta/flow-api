@@ -54,7 +54,8 @@ func (s *storePostgres) GetUser(email string) (*User, error) {
 
 func (s *storePostgres) CreateUser(user *User) error {
 	log.Println("Creating a user record in DB")
-	_, err := s.db.Exec(context.Background(), "insert into users (email, role, dni, name, lastname_main, lastname_secondary, address) values ($1, $2, $3, $4, $5, $6, $7)", user.Email, user.Role, user.Dni, user.Name, user.LastnameMain, user.LastnameSecondary, user.Address)
+	var userId int
+	err := s.db.QueryRow(context.Background(), "insert into users (email, role, dni, name, lastname_main, lastname_secondary, address) values ($1, $2, $3, $4, $5, $6, $7) returning id", user.Email, user.Role, user.Dni, user.Name, user.LastnameMain, user.LastnameSecondary, user.Address).Scan(&userId)
 	if err != nil {
 		log.Println("Error captured from database layer in CreateUser")
 		if createUserError := s.userPgError(err); createUserError != nil {
@@ -63,6 +64,8 @@ func (s *storePostgres) CreateUser(user *User) error {
 		log.Println(err)
 		return errors.New("internal database error")
 	}
+	log.Println("User successfully created with id:", userId)
+	user.Id = userId
 	return nil
 }
 

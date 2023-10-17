@@ -50,8 +50,8 @@ func (u *userCreateRequest) Bind(r *http.Request) error {
 	return nil
 }
 
-// validate validates the userCreateRequest fields of the request
-func (u *userCreateRequest) validate() error {
+// validateRequestFields validates the userCreateRequest fields of the request
+func (u *userCreateRequest) validateRequestFields() error {
 	if u.Email == "" {
 		return errors.New("missing required 'email' field")
 	}
@@ -119,10 +119,6 @@ func (s *Server) deleteUser(id int) error {
 	}
 	log.Println("User successfully deleted")
 	return nil
-}
-
-type SuccessResponse struct {
-	Status string `json:"status"`
 }
 
 // DecodeJsonBody decodes the request body into the provided interface
@@ -229,7 +225,7 @@ func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	//	return
 	//}
 
-	err = uCreateRequest.validate()
+	err = uCreateRequest.validateRequestFields()
 	if err != nil {
 		err := render.Render(w, r, ErrInvalidRequest(err))
 		if err != nil {
@@ -266,8 +262,16 @@ func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 		// Stop handler execution
 		return
 	}
-	successResp := &SuccessResponse{Status: "User successfully created"}
-	jsonResp, err := json.Marshal(successResp)
+
+	// Create access token and refresh token
+	tokensResponse, err := generateTokens(u)
+	if err != nil {
+		log.Println("Error trying to generate access token: ", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+
+	jsonResp, err := json.Marshal(tokensResponse)
 	if err != nil {
 		log.Println("Error marshalling success response: ", err)
 		http.Error(w, "Internal error", http.StatusInternalServerError)
@@ -298,9 +302,9 @@ func (s *Server) DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// UpdateUserHandler HTTP Handler updates some user fields
+// UpdateUserHandler HTTP Handler updates user fields as Bank Account
 func (s *Server) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("UpdateUserHandler")
+	log.Println("TODO: UpdateUserHandler")
 	_, err := w.Write([]byte("UpdateUserHandler"))
 	if err != nil {
 		log.Println("Error writing http response: ", err)
@@ -308,9 +312,9 @@ func (s *Server) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GetUsersHandler HTTP Handler returns all users
+// GetUsersHandler HTTP Handler returns a list of all users
 func (s *Server) GetUsersHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("GetUsersHandler")
+	log.Println("TODO: GetUsersHandler")
 	_, err := w.Write([]byte("GetUsersHandler"))
 	if err != nil {
 		log.Println("Error writing http response: ", err)
