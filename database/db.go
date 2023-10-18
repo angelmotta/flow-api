@@ -11,13 +11,13 @@ import (
 )
 
 type User struct {
-	Id                int       `json:"id"`
+	Id                int       `json:"user_id"`
 	Email             string    `json:"email"`
 	Role              string    `json:"role"`
 	Dni               string    `json:"dni"`
 	Name              string    `json:"name"`
-	LastnameMain      string    `json:"lastnameMain"`
-	LastnameSecondary string    `json:"lastnameSecondary"`
+	LastnameMain      string    `json:"lastname_main"`
+	LastnameSecondary string    `json:"lastname_secondary"`
 	Address           string    `json:"address"`
 	CreatedAt         time.Time `json:"createdAt"`
 }

@@ -198,6 +198,11 @@ func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type userCreateResponse struct {
+	*database.User `json:"user_info"`
+	tokensResponse `json:"tokens"`
+}
+
 // CreateUserHandler HTTP Handler creates a user
 func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("CreateUserHandler")
@@ -214,16 +219,6 @@ func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-
-	// Bind request body to userCreateRequest struct using chi render.Bind
-	//if err := render.Bind(r, &uCreateRequest); err != nil {
-	//	err := render.Render(w, r, ErrInvalidRequest(err))
-	//	if err != nil {
-	//		log.Println("Error trying to render error: ", err)
-	//		http.Error(w, err.Error(), http.StatusInternalServerError)
-	//	}
-	//	return
-	//}
 
 	err = uCreateRequest.validateRequestFields()
 	if err != nil {
@@ -265,13 +260,17 @@ func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Create access token and refresh token
 	tokensResponse, err := generateTokens(u)
+	responseMessage := userCreateResponse{
+		User:           u,
+		tokensResponse: *tokensResponse,
+	}
 	if err != nil {
 		log.Println("Error trying to generate access token: ", err)
 		http.Error(w, "Internal error", http.StatusInternalServerError)
 		return
 	}
 
-	jsonResp, err := json.Marshal(tokensResponse)
+	jsonResp, err := json.Marshal(responseMessage)
 	if err != nil {
 		log.Println("Error marshalling success response: ", err)
 		http.Error(w, "Internal error", http.StatusInternalServerError)
