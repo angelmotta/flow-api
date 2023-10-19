@@ -16,7 +16,7 @@ import (
 
 type Server struct {
 	store        database.Store // store is a dependency defined as an interface
-	MaxBodyBytes int64          // maxBodyBytes is the maximum number of bytes the server will read parsing the request body
+	MaxBodyBytes int64          // The maximum number of bytes the server will read parsing the request body
 }
 
 type userCreateRequest struct {
@@ -172,10 +172,14 @@ func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	// TODO: verify token from Authorization header
+
+	// Get user from database
 	user, err := s.store.GetUser(email)
 	if err != nil {
 		log.Printf("Error getting user from database: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 	if user == nil {
 		log.Println("User not found")
@@ -198,12 +202,12 @@ func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-type userCreateResponse struct {
+type successfulUserAccessResponse struct {
 	*database.User `json:"user_info"`
 	tokensResponse `json:"tokens"`
 }
 
-// CreateUserHandler HTTP Handler creates a user
+// CreateUserHandler HTTP Handler creates a user from a Signup request
 func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("CreateUserHandler")
 	// Creating requestUserCreate 'Object' based on http request
@@ -232,7 +236,7 @@ func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("valid request received: %v", uCreateRequest)
 
-	// Create new user Object based on request
+	// Create requestCreateUser Object based on HTTP request
 	u := &database.User{
 		Email:             uCreateRequest.Email,
 		Role:              "customer",
@@ -258,24 +262,26 @@ func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create access token and refresh token
+	// Create tokens for users: access token and refresh token
 	tokensResponse, err := generateTokens(u)
-	responseMessage := userCreateResponse{
-		User:           u,
-		tokensResponse: *tokensResponse,
-	}
 	if err != nil {
 		log.Println("Error trying to generate access token: ", err)
 		http.Error(w, "Internal error", http.StatusInternalServerError)
 		return
 	}
 
+	// Create response message
+	responseMessage := successfulUserAccessResponse{
+		User:           u,
+		tokensResponse: *tokensResponse,
+	}
 	jsonResp, err := json.Marshal(responseMessage)
 	if err != nil {
 		log.Println("Error marshalling success response: ", err)
 		http.Error(w, "Internal error", http.StatusInternalServerError)
 		return
 	}
+
 	w.WriteHeader(http.StatusCreated)
 	_, err = w.Write(jsonResp)
 	if err != nil {
@@ -315,6 +321,68 @@ func (s *Server) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) GetUsersHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("TODO: GetUsersHandler")
 	_, err := w.Write([]byte("GetUsersHandler"))
+	if err != nil {
+		log.Println("Error writing http response: ", err)
+		return
+	}
+}
+
+func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("LoginHandler")
+	// Get token from Authorization header
+	payloadAuthHeader := r.Header.Get("Authorization")
+	if payloadAuthHeader == "" {
+		log.Println("No token provided in Authorization header")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	payloadAuthHeader = strings.TrimSpace(payloadAuthHeader)
+	token := strings.TrimPrefix(payloadAuthHeader, "Bearer ")
+
+	// TODO: verify token from Authorization header and obtain email from payload
+	email, ok := isValidExternalUserToken(token)
+	if !ok {
+		log.Println("Invalid token")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	// Get user from database
+	user, err := s.store.GetUser(email)
+	if err != nil {
+		log.Printf("Error getting user from database: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if user == nil {
+		log.Println("User not found, please signup first")
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	// Create App tokens for user: access token and refresh token
+	tokensResponse, err := generateTokens(user)
+	if err != nil {
+		log.Println("Error trying to generate access token: ", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Create response message
+	log.Println("User successfully logged in: sending response message")
+	responseMessage := successfulUserAccessResponse{
+		User:           user,
+		tokensResponse: *tokensResponse,
+	}
+	jsonResp, err := json.Marshal(responseMessage)
+	if err != nil {
+		log.Println("Error marshalling success response: ", err)
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_, err = w.Write(jsonResp)
 	if err != nil {
 		log.Println("Error writing http response: ", err)
 		return

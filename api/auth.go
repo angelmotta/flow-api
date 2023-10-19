@@ -89,3 +89,9 @@ func generateTokens(user *database.User) (*tokensResponse, error) {
 
 	return r, nil
 }
+
+func isValidExternalUserToken(token string) (string, bool) {
+	// TODO: verify token from Google
+
+	return "angel.motta@utec.com", true
+}

@@ -41,5 +41,6 @@ func main() {
 	r.Post("/api/v1/users", server.CreateUserHandler)
 	r.Put("/api/v1/users/{id}", server.UpdateUserHandler)
 	r.Delete("/api/v1/users/{id}", server.DeleteUserHandler)
+	r.Post("/api/v1/auth/login", server.LoginHandler)
 	log.Fatal(http.ListenAndServe(":8080", r))
 }
