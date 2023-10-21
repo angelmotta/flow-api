@@ -39,6 +39,7 @@ func main() {
 	r.Get("/api/v1/users", server.GetUsersHandler)
 	r.Get("/api/v1/users/{email}", server.GetUserHandler)
 	r.Post("/api/v1/users", server.CreateUserHandler)
+	r.Post("/api/v1/users/signup", server.UserSignupHandler)
 	r.Put("/api/v1/users/{id}", server.UpdateUserHandler)
 	r.Delete("/api/v1/users/{id}", server.DeleteUserHandler)
 	r.Post("/api/v1/auth/login", server.LoginHandler)

@@ -388,3 +388,93 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+type UserSignupRequest struct {
+	Step     *int                   `json:"step"`
+	Idp      string                 `json:"idp"`
+	UserInfo *UserInfoSignupRequest `json:"user_info"`
+}
+
+func (u *UserSignupRequest) Validate() error {
+	if u.Step == nil {
+		return errors.New("missing required 'step' field")
+	}
+	if u.Idp == "" {
+		return errors.New("missing required 'idp' field")
+	}
+	if u.UserInfo == nil {
+		return errors.New("missing required 'user_info' field")
+	}
+	if *u.Step < 1 || *u.Step > 2 {
+		return errors.New("invalid value in 'step' field")
+	}
+	return nil
+}
+
+type UserInfoSignupRequest struct {
+	Dni               string `json:"dni"`
+	Name              string `json:"name"`
+	LastnameMain      string `json:"lastname_main"`
+	LastnameSecondary string `json:"lastname_secondary"`
+	Address           string `json:"address"`
+}
+
+func (s *Server) UserSignupHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("UserSignupHandler")
+	// Get token from Authorization header
+	payloadAuthHeader := r.Header.Get("Authorization")
+	if payloadAuthHeader == "" {
+		log.Println("No token provided in Authorization header")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	payloadAuthHeader = strings.TrimSpace(payloadAuthHeader)
+	token := strings.TrimPrefix(payloadAuthHeader, "Bearer ")
+
+	// TODO: verify token from Authorization header and obtain email from payload
+	email, ok := isValidExternalUserToken(token)
+	if !ok {
+		log.Println("Invalid token")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	log.Println("User email: ", email)
+
+	// Receive payload from body request
+	userSignupRequest := &UserSignupRequest{}
+	err := s.DecodeJsonBody(w, r, userSignupRequest)
+	if err != nil {
+		sendJsonResponse(w, err, http.StatusBadRequest)
+		return
+	}
+
+	// TODO: validate userSignupRequest
+	log.Println("Input received: ")
+	log.Println(userSignupRequest)
+	err = userSignupRequest.Validate()
+	if err != nil {
+		log.Println("validate userSignupRequest error:", err)
+		sendJsonResponse(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	sendJsonResponse(w, userSignupRequest, http.StatusOK)
+}
+
+func sendJsonResponse(w http.ResponseWriter, response interface{}, statusCode int) {
+	responseJson, err := json.Marshal(response)
+	if err != nil {
+		// Marshal error (internal server error)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// Set headers
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	// Write Json response
+	_, err = w.Write(responseJson)
+	if err != nil {
+		log.Printf("Error sending response: %v", err.Error())
+		return
+	}
+}
