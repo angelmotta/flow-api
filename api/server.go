@@ -402,11 +402,14 @@ func (u *UserSignupRequest) Validate() error {
 	if u.Idp == "" {
 		return errors.New("missing required 'idp' field")
 	}
-	if u.UserInfo == nil {
-		return errors.New("missing required 'user_info' field")
-	}
 	if *u.Step < 1 || *u.Step > 2 {
 		return errors.New("invalid value in 'step' field")
+	}
+	if *u.Step == 2 && u.UserInfo == nil {
+		return errors.New("missing required 'user_info' field")
+	}
+	if err := u.UserInfo.Validate(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -417,6 +420,25 @@ type UserInfoSignupRequest struct {
 	LastnameMain      string `json:"lastname_main"`
 	LastnameSecondary string `json:"lastname_secondary"`
 	Address           string `json:"address"`
+}
+
+func (u *UserInfoSignupRequest) Validate() error {
+	if u.Dni == "" {
+		return errors.New("user_info missing required 'dni' field")
+	}
+	if u.Name == "" {
+		return errors.New("user_info missing required 'name' field")
+	}
+	if u.LastnameMain == "" {
+		return errors.New("user_info missing required 'lastname_main' field")
+	}
+	if u.LastnameSecondary == "" {
+		return errors.New("user_info missing required 'lastname_secondary' field")
+	}
+	if u.Address == "" {
+		return errors.New("user_info missing required 'address' field")
+	}
+	return nil
 }
 
 func (s *Server) UserSignupHandler(w http.ResponseWriter, r *http.Request) {
