@@ -414,23 +414,20 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 type UserSignupRequest struct {
-	Step     *int                   `json:"step"`
+	Step     string                 `json:"step"`
 	Idp      string                 `json:"idp"`
 	UserInfo *UserInfoSignupRequest `json:"user_info"`
 }
 
 func (u *UserSignupRequest) Validate() error {
-	if u.Step == nil {
-		return errors.New("missing required 'step' field")
-	}
 	if u.Idp == "" {
 		return errors.New("missing required 'idp' field")
 	}
-	if *u.Step < 1 || *u.Step > 2 {
-		return errors.New("invalid value in 'step' field")
+	if u.Step != "1" && u.Step != "2" {
+		return errors.New("invalid 'step' value")
 	}
-	if *u.Step == 2 && u.UserInfo == nil {
-		return errors.New("missing required 'user_info' field")
+	if u.Step == "2" && u.UserInfo == nil {
+		return errors.New("missing User Information in 'user_info' field")
 	}
 	if err := u.UserInfo.Validate(); err != nil {
 		return err
@@ -491,20 +488,82 @@ func (s *Server) UserSignupHandler(w http.ResponseWriter, r *http.Request) {
 	// Validate Input
 	err = userSignupRequest.Validate()
 	if err != nil {
-		log.Println("validate userSignupRequest error:", err)
+		log.Println("validate userSignupRequest error ->", err)
 		sendJsonResponse(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// TODO: verify token from Authorization header and obtain email from payload
+	// Verify token according to idp specified in body request
 	email, err := s.isValidExternalUserToken(token, userSignupRequest.Idp)
 	if err != nil {
 		log.Println("Invalid token")
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(err.Error()))
+		sendJsonResponse(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 	log.Println("User email: ", email)
+
+	// Handle Signup step flow
+	if userSignupRequest.Step == "1" {
+		// Verify if user is available and respond with error if not
+		user, err := s.store.GetUser(email)
+		if err != nil {
+			log.Printf("Error getting user from database: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if user != nil {
+			log.Println("User already registered")
+			resMessage := struct{ Message string }{
+				Message: "User already registered",
+			}
+			sendJsonResponse(w, resMessage, http.StatusConflict)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	} else if userSignupRequest.Step == "2" {
+		// Create user in database
+		user := &database.User{
+			Email:             email,
+			Role:              "customer",
+			Dni:               userSignupRequest.UserInfo.Dni,
+			Name:              userSignupRequest.UserInfo.Name,
+			LastnameMain:      userSignupRequest.UserInfo.LastnameMain,
+			LastnameSecondary: userSignupRequest.UserInfo.LastnameSecondary,
+			Address:           userSignupRequest.UserInfo.Address,
+		}
+		err = s.store.CreateUser(user)
+		if err != nil {
+			log.Printf("Error creating user: %v", err)
+			errorHttpCode := getCreateUserHttpCode(err.Error())
+			errorResponse := ErrorMessage{
+				Message: err.Error(),
+			}
+			sendJsonResponse(w, errorResponse, errorHttpCode)
+			return
+		}
+		// Create tokens for users: access token and refresh token
+		tokensResponse, err := s.generateTokens(user)
+		if err != nil {
+			log.Println("Error trying to generate access token: ", err)
+			errResponse := ErrorMessage{
+				Message: "Error while generating access to App Flow",
+				Error:   "Error while generating access token for user",
+			}
+			sendJsonResponse(w, errResponse, http.StatusInternalServerError)
+		}
+		// Create and send response message
+		log.Println("User successfully logged in: sending response message")
+		responseMessage := successfulUserAccessResponse{
+			User:           user,
+			tokensResponse: *tokensResponse,
+		}
+		sendJsonResponse(w, responseMessage, http.StatusOK)
+	} else {
+		log.Println("Invalid step value")
+		sendJsonResponse(w, "Invalid step value", http.StatusBadRequest)
+		return
+	}
 
 	sendJsonResponse(w, userSignupRequest, http.StatusOK)
 }
