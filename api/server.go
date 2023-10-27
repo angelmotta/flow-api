@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/angelmotta/flow-api/database"
+	"github.com/angelmotta/flow-api/internal/config"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
 	"io"
@@ -15,8 +16,8 @@ import (
 )
 
 type Server struct {
-	store        database.Store // store is a dependency defined as an interface
-	MaxBodyBytes int64          // The maximum number of bytes the server will read parsing the request body
+	store  database.Store // store is a dependency defined as an interface
+	Config *config.Config
 }
 
 type userCreateRequest struct {
@@ -83,10 +84,10 @@ func isValidEmail(email string) bool {
 }
 
 // NewServer receive an Interface Store and creates a new API Server Object
-func NewServer(store database.Store) *Server {
+func NewServer(store database.Store, c *config.Config) *Server {
 	return &Server{
-		store,
-		1024 * 1024, // 1MB
+		store:  store,
+		Config: c,
 	}
 }
 
@@ -263,7 +264,7 @@ func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create tokens for users: access token and refresh token
-	tokensResponse, err := generateTokens(u)
+	tokensResponse, err := s.generateTokens(u)
 	if err != nil {
 		log.Println("Error trying to generate access token: ", err)
 		http.Error(w, "Internal error", http.StatusInternalServerError)
@@ -327,6 +328,20 @@ func (s *Server) GetUsersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type LoginRequest struct {
+	Idp string `json:"idp"`
+}
+
+func (l *LoginRequest) Validate() error {
+	if l.Idp == "" {
+		return errors.New("missing required 'idp' field")
+	}
+	if l.Idp != "facebook" && l.Idp != "google" {
+		return errors.New("invalid 'idp' value")
+	}
+	return nil
+}
+
 func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("LoginHandler")
 	// Get token from Authorization header
@@ -339,11 +354,25 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	payloadAuthHeader = strings.TrimSpace(payloadAuthHeader)
 	token := strings.TrimPrefix(payloadAuthHeader, "Bearer ")
 
-	// TODO: verify token from Authorization header and obtain email from payload
-	email, ok := isValidExternalUserToken(token)
-	if !ok {
+	// Get Body from request
+	loginRequest := &LoginRequest{}
+	err := s.DecodeJsonBody(w, r, loginRequest)
+	if err != nil {
+		sendJsonResponse(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := loginRequest.Validate(); err != nil {
+		log.Println("validate loginRequest error:", err)
+		sendJsonResponse(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	email, err := s.isValidExternalUserToken(token, loginRequest.Idp)
+	if err != nil {
 		log.Println("Invalid token")
 		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(err.Error()))
 		return
 	}
 
@@ -361,7 +390,7 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create App tokens for user: access token and refresh token
-	tokensResponse, err := generateTokens(user)
+	tokensResponse, err := s.generateTokens(user)
 	if err != nil {
 		log.Println("Error trying to generate access token: ", err)
 		http.Error(w, "Internal error", http.StatusInternalServerError)
@@ -441,6 +470,7 @@ func (u *UserInfoSignupRequest) Validate() error {
 	return nil
 }
 
+// UserSignupHandler creates a user from a Signup request according to the step of onboarding
 func (s *Server) UserSignupHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("UserSignupHandler")
 	// Get token from Authorization header
@@ -453,32 +483,33 @@ func (s *Server) UserSignupHandler(w http.ResponseWriter, r *http.Request) {
 	payloadAuthHeader = strings.TrimSpace(payloadAuthHeader)
 	token := strings.TrimPrefix(payloadAuthHeader, "Bearer ")
 
-	// TODO: verify token from Authorization header and obtain email from payload
-	email, ok := isValidExternalUserToken(token)
-	if !ok {
-		log.Println("Invalid token")
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-	log.Println("User email: ", email)
-
-	// Receive payload from body request
+	// Get Body from request
 	userSignupRequest := &UserSignupRequest{}
 	err := s.DecodeJsonBody(w, r, userSignupRequest)
 	if err != nil {
-		sendJsonResponse(w, err, http.StatusBadRequest)
+		sendJsonResponse(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	// TODO: validate userSignupRequest
 	log.Println("Input received: ")
 	log.Println(userSignupRequest)
+
+	// Validate Input
 	err = userSignupRequest.Validate()
 	if err != nil {
 		log.Println("validate userSignupRequest error:", err)
 		sendJsonResponse(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	// TODO: verify token from Authorization header and obtain email from payload
+	email, err := s.isValidExternalUserToken(token, userSignupRequest.Idp)
+	if err != nil {
+		log.Println("Invalid token")
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	log.Println("User email: ", email)
 
 	sendJsonResponse(w, userSignupRequest, http.StatusOK)
 }

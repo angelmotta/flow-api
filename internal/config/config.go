@@ -7,12 +7,14 @@ import (
 )
 
 type Config struct {
-	PgUser     string
-	PgPassword string
-	PgHost     string
-	PgPort     string
-	PgDatabase string
-	PgSslMode  string
+	PgUser           string
+	PgPassword       string
+	PgHost           string
+	PgPort           string
+	PgDatabase       string
+	PgSslMode        string
+	GOauthClientId   string
+	HttpMaxBodyBytes int64
 }
 
 func Init() *Config {
@@ -28,6 +30,8 @@ func (c *Config) loadConfig() {
 	c.PgPort = getEnvStr("PGPORT")
 	c.PgDatabase = getEnvStr("PGDATABASE")
 	c.PgSslMode = getEnvStr("PGSSLMODE") // disable
+	c.HttpMaxBodyBytes = 1024 * 1024
+	c.GOauthClientId = getEnvStr("GOAUTHCLIENTID")
 }
 
 func (c *Config) GetPgDsn() string {

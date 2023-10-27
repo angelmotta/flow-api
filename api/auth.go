@@ -1,8 +1,12 @@
 package api
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"github.com/angelmotta/flow-api/database"
 	"github.com/golang-jwt/jwt/v5"
+	"google.golang.org/api/idtoken"
 	"log"
 	"strconv"
 	"time"
@@ -20,7 +24,7 @@ type tokensResponse struct {
 }
 
 // generateAccessToken generates a signed access token
-func generateAccessToken(userId string, expiresAt time.Time) (string, error) {
+func (s *Server) generateAccessToken(userId string, expiresAt time.Time) (string, error) {
 	mySigningKey := []byte("my_dirty_secret")
 
 	// Create claims with multiple fields populated
@@ -43,7 +47,7 @@ func generateAccessToken(userId string, expiresAt time.Time) (string, error) {
 	return signedToken, nil
 }
 
-func generateRefreshToken(userId string, expiresAt time.Time) (string, error) {
+func (s *Server) generateRefreshToken(userId string, expiresAt time.Time) (string, error) {
 	mySigningKey := []byte("my_dirty_secret")
 	claims := MyCustomClaims{
 		jwt.RegisteredClaims{
@@ -64,17 +68,17 @@ func generateRefreshToken(userId string, expiresAt time.Time) (string, error) {
 	return signedToken, nil
 }
 
-func generateTokens(user *database.User) (*tokensResponse, error) {
+func (s *Server) generateTokens(user *database.User) (*tokensResponse, error) {
 	uId := strconv.Itoa(user.Id)
 	accessTokenExpiresAt := time.Now().Add(10 * time.Minute)
-	accessToken, err := generateAccessToken(uId, accessTokenExpiresAt)
+	accessToken, err := s.generateAccessToken(uId, accessTokenExpiresAt)
 	if err != nil {
 		log.Fatal("Error generating access token", err)
 		return nil, err
 	}
 
 	refreshTokenExpiresAt := time.Now().Add(24 * time.Hour * 7)
-	refreshToken, err := generateRefreshToken(uId, refreshTokenExpiresAt)
+	refreshToken, err := s.generateRefreshToken(uId, refreshTokenExpiresAt)
 	if err != nil {
 		log.Fatal("Error generating refresh token", err)
 		return nil, err
@@ -90,8 +94,35 @@ func generateTokens(user *database.User) (*tokensResponse, error) {
 	return r, nil
 }
 
-func isValidExternalUserToken(token string) (string, bool) {
-	// TODO: verify token from Google
+func (s *Server) verifyGTokenId(token string) (string, error) {
+	// Verify the ID token, including the expiry, signature, issuer, and audience.
+	tokenPayload, err := idtoken.Validate(context.Background(), token, s.Config.GOauthClientId)
+	if err != nil {
+		log.Println("Invalid token")
+		log.Println(err)
+		return "", err
+	}
 
-	return "angel.motta@utec.com", true
+	// Valid Token, you can use the token to get user information.
+	fmt.Println("Token successfully verified.")
+	email := tokenPayload.Claims["email"].(string)
+	return email, nil
+}
+
+func (s *Server) isValidExternalUserToken(token, idp string) (string, error) {
+	email := ""
+	if idp == "google" {
+		e, err := s.verifyGTokenId(token)
+		if err != nil {
+			return "", err
+		}
+		email = e
+	} else if idp == "facebook" {
+		log.Println("facebook not implemented yet")
+		return "", errors.New("facebook not implemented yet")
+	} else {
+		log.Println("Invalid idp:", idp)
+		return "", errors.New("invalid idp")
+	}
+	return email, nil
 }

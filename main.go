@@ -29,13 +29,13 @@ func main() {
 	// Create a store Object using the database pool
 	store := database.NewPgStore(dbpool) // store Object implements the Store interface
 	// Create a server by injecting the store as a dependency
-	server := api.NewServer(store)
+	server := api.NewServer(store, c)
 
 	// Chi router
 	log.Println("Starting server at port 8080")
 	r := chi.NewRouter()
 	r.Use(middleware.AllowContentType("application/json"))
-	r.Use(middleware.RequestSize(server.MaxBodyBytes))
+	r.Use(middleware.RequestSize(server.Config.HttpMaxBodyBytes))
 	r.Get("/api/v1/users", server.GetUsersHandler)
 	r.Get("/api/v1/users/{email}", server.GetUserHandler)
 	r.Post("/api/v1/users", server.CreateUserHandler)
