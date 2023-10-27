@@ -358,12 +358,13 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	loginRequest := &LoginRequest{}
 	err := s.DecodeJsonBody(w, r, loginRequest)
 	if err != nil {
+		log.Println("Error decoding json body -> ", err)
 		sendJsonResponse(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	if err := loginRequest.Validate(); err != nil {
-		log.Println("validate loginRequest error:", err)
+		log.Println("validate loginRequest error -> ", err)
 		sendJsonResponse(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -371,8 +372,7 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	email, err := s.isValidExternalUserToken(token, loginRequest.Idp)
 	if err != nil {
 		log.Println("Invalid token")
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(err.Error()))
+		sendJsonResponse(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -384,38 +384,33 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if user == nil {
-		log.Println("User not found, please signup first")
-		w.WriteHeader(http.StatusNotFound)
+		log.Println("User not registered, please signup")
+		errResponse := ErrorMessage{
+			Message: "User not registered, please signup",
+		}
+		sendJsonResponse(w, errResponse, http.StatusNotFound)
 		return
 	}
 
 	// Create App tokens for user: access token and refresh token
 	tokensResponse, err := s.generateTokens(user)
 	if err != nil {
-		log.Println("Error trying to generate access token: ", err)
-		http.Error(w, "Internal error", http.StatusInternalServerError)
+		log.Println("Error trying to generate access token -> ", err)
+		errResponse := ErrorMessage{
+			Message: "Error while generating access to App Flow",
+			Error:   "Error while generating access token for user",
+		}
+		sendJsonResponse(w, errResponse, http.StatusInternalServerError)
 		return
 	}
 
-	// Create response message
+	// Create and send response message
 	log.Println("User successfully logged in: sending response message")
 	responseMessage := successfulUserAccessResponse{
 		User:           user,
 		tokensResponse: *tokensResponse,
 	}
-	jsonResp, err := json.Marshal(responseMessage)
-	if err != nil {
-		log.Println("Error marshalling success response: ", err)
-		http.Error(w, "Internal error", http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	_, err = w.Write(jsonResp)
-	if err != nil {
-		log.Println("Error writing http response: ", err)
-		return
-	}
+	sendJsonResponse(w, responseMessage, http.StatusOK)
 }
 
 type UserSignupRequest struct {
