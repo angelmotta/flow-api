@@ -173,7 +173,6 @@ func (s *Server) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	// TODO: verify token from Authorization header
 
 	// Get user from database
 	user, err := s.store.GetUser(email)
@@ -371,7 +370,7 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	email, err := s.isValidExternalUserToken(token, loginRequest.Idp)
 	if err != nil {
-		log.Println("Invalid token")
+		log.Println("Invalid credential")
 		sendJsonResponse(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
@@ -429,7 +428,8 @@ func (u *UserSignupRequest) Validate() error {
 	if u.Step == "2" && u.UserInfo == nil {
 		return errors.New("missing User Information in 'user_info' field")
 	}
-	if err := u.UserInfo.Validate(); err != nil {
+	if u.Step == "2" && u.UserInfo != nil {
+		err := u.UserInfo.Validate()
 		return err
 	}
 	return nil
@@ -469,7 +469,10 @@ func (s *Server) UserSignupHandler(w http.ResponseWriter, r *http.Request) {
 	payloadAuthHeader := r.Header.Get("Authorization")
 	if payloadAuthHeader == "" {
 		log.Println("No token provided in Authorization header")
-		w.WriteHeader(http.StatusUnauthorized)
+		errResponse := &ErrorMessage{
+			Message: "No token provided in Authorization header",
+		}
+		sendJsonResponse(w, errResponse, http.StatusUnauthorized)
 		return
 	}
 	payloadAuthHeader = strings.TrimSpace(payloadAuthHeader)
@@ -479,25 +482,37 @@ func (s *Server) UserSignupHandler(w http.ResponseWriter, r *http.Request) {
 	userSignupRequest := &UserSignupRequest{}
 	err := s.DecodeJsonBody(w, r, userSignupRequest)
 	if err != nil {
-		sendJsonResponse(w, err.Error(), http.StatusBadRequest)
+		errResponse := &ErrorMessage{
+			Message: "Invalid request",
+			Error:   err.Error(),
+		}
+		sendJsonResponse(w, errResponse, http.StatusBadRequest)
 		return
 	}
-	log.Println("Input received: ")
+	log.Printf("Input received: %v", userSignupRequest)
 	log.Println(userSignupRequest)
 
 	// Validate Input
 	err = userSignupRequest.Validate()
 	if err != nil {
 		log.Println("validate userSignupRequest error ->", err)
-		sendJsonResponse(w, err.Error(), http.StatusBadRequest)
+		errResponse := ErrorMessage{
+			Message: "Invalid request",
+			Error:   err.Error(),
+		}
+		sendJsonResponse(w, &errResponse, http.StatusBadRequest)
 		return
 	}
 
 	// Verify token according to idp specified in body request
 	email, err := s.isValidExternalUserToken(token, userSignupRequest.Idp)
 	if err != nil {
-		log.Println("Invalid token")
-		sendJsonResponse(w, err.Error(), http.StatusUnauthorized)
+		log.Printf("isValidExternalUserToken error -> %v ", err)
+		errResponse := ErrorMessage{
+			Message: "Invalid credential",
+			Error:   err.Error(),
+		}
+		sendJsonResponse(w, &errResponse, http.StatusUnauthorized)
 		return
 	}
 	log.Println("User email: ", email)
@@ -508,17 +523,22 @@ func (s *Server) UserSignupHandler(w http.ResponseWriter, r *http.Request) {
 		user, err := s.store.GetUser(email)
 		if err != nil {
 			log.Printf("Error getting user from database: %v", err)
-			w.WriteHeader(http.StatusInternalServerError)
+			errRes := ErrorMessage{
+				Message: "Service unavailable",
+				Error:   err.Error(),
+			}
+			sendJsonResponse(w, errRes, http.StatusInternalServerError)
 			return
 		}
 		if user != nil {
 			log.Println("User already registered")
-			resMessage := struct{ Message string }{
+			errRes := ErrorMessage{
 				Message: "User already registered",
 			}
-			sendJsonResponse(w, resMessage, http.StatusConflict)
+			sendJsonResponse(w, errRes, http.StatusConflict)
 			return
 		}
+		// User is available, continue with signup flow
 		w.WriteHeader(http.StatusOK)
 		return
 	} else if userSignupRequest.Step == "2" {
@@ -548,9 +568,10 @@ func (s *Server) UserSignupHandler(w http.ResponseWriter, r *http.Request) {
 			log.Println("Error trying to generate access token: ", err)
 			errResponse := ErrorMessage{
 				Message: "Error while generating access to App Flow",
-				Error:   "Error while generating access token for user",
+				Error:   err.Error(),
 			}
 			sendJsonResponse(w, errResponse, http.StatusInternalServerError)
+			return
 		}
 		// Create and send response message
 		log.Println("User successfully logged in: sending response message")
@@ -559,13 +580,12 @@ func (s *Server) UserSignupHandler(w http.ResponseWriter, r *http.Request) {
 			tokensResponse: *tokensResponse,
 		}
 		sendJsonResponse(w, responseMessage, http.StatusOK)
+		return
 	} else {
 		log.Println("Invalid step value")
 		sendJsonResponse(w, "Invalid step value", http.StatusBadRequest)
 		return
 	}
-
-	sendJsonResponse(w, userSignupRequest, http.StatusOK)
 }
 
 func sendJsonResponse(w http.ResponseWriter, response interface{}, statusCode int) {

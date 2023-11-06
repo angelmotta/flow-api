@@ -98,8 +98,7 @@ func (s *Server) verifyGTokenId(token string) (string, error) {
 	// Verify the ID token, including the expiry, signature, issuer, and audience.
 	tokenPayload, err := idtoken.Validate(context.Background(), token, s.Config.GOauthClientId)
 	if err != nil {
-		log.Println("Invalid token")
-		log.Println(err)
+		log.Printf("idtoken.Validate() error -> %v", err)
 		return "", err
 	}
 

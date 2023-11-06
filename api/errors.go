@@ -33,6 +33,6 @@ func ErrInvalidRequest(err error) render.Renderer {
 }
 
 type ErrorMessage struct {
-	Message string `json:"message"` // user-level message
-	Error   string `json:"error"`   // application-level error message, for debugging
+	Message string `json:"message"`         // user-level message
+	Error   string `json:"error,omitempty"` // application-level error message, for debugging
 }
