@@ -261,33 +261,23 @@ func (s *Server) CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 		// Stop handler execution
 		return
 	}
+	log.Println("User successfully created")
+	log.Println(u)
 
 	// Create tokens for users: access token and refresh token
+	log.Println("Generating tokens and sending successful response")
 	tokensResponse, err := s.generateTokens(u)
 	if err != nil {
 		log.Println("Error trying to generate access token: ", err)
 		http.Error(w, "Internal error", http.StatusInternalServerError)
 		return
 	}
-
 	// Create response message
 	responseMessage := successfulUserAccessResponse{
 		User:           u,
 		tokensResponse: *tokensResponse,
 	}
-	jsonResp, err := json.Marshal(responseMessage)
-	if err != nil {
-		log.Println("Error marshalling success response: ", err)
-		http.Error(w, "Internal error", http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusCreated)
-	_, err = w.Write(jsonResp)
-	if err != nil {
-		log.Println("Error writing http response: ", err)
-		return
-	}
+	sendJsonResponse(w, responseMessage, http.StatusCreated)
 }
 
 func getCreateUserHttpCode(errMsg string) int {
@@ -519,6 +509,7 @@ func (s *Server) UserSignupHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Handle Signup step flow
 	if userSignupRequest.Step == "1" {
+		log.Println("Signup Step 1: User Information")
 		// Verify if user is available and respond with error if not
 		user, err := s.store.GetUser(email)
 		if err != nil {
@@ -542,6 +533,7 @@ func (s *Server) UserSignupHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	} else if userSignupRequest.Step == "2" {
+		log.Println("Signup Step 2: User Information")
 		// Create user in database
 		user := &database.User{
 			Email:             email,
@@ -562,7 +554,11 @@ func (s *Server) UserSignupHandler(w http.ResponseWriter, r *http.Request) {
 			sendJsonResponse(w, errorResponse, errorHttpCode)
 			return
 		}
+		log.Println("User record successfully created")
+		log.Println(user)
+
 		// Create tokens for users: access token and refresh token
+		log.Println("Generating tokens and sending successful response")
 		tokensResponse, err := s.generateTokens(user)
 		if err != nil {
 			log.Println("Error trying to generate access token: ", err)
@@ -574,7 +570,7 @@ func (s *Server) UserSignupHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Create and send response message
-		log.Println("User successfully logged in: sending response message")
+		log.Println("Successfully Signup: sending response message")
 		responseMessage := successfulUserAccessResponse{
 			User:           user,
 			tokensResponse: *tokensResponse,
@@ -589,6 +585,7 @@ func (s *Server) UserSignupHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func sendJsonResponse(w http.ResponseWriter, response interface{}, statusCode int) {
+	log.Println("Sending json response")
 	responseJson, err := json.Marshal(response)
 	if err != nil {
 		// Marshal error (internal server error)
